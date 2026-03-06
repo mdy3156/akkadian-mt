@@ -1,0 +1,10 @@
+torch
+transformers
+datasets
+pandas
+numpy
+sentencepiece
+pyyaml
+evaluate
+sacrebleu
+accelerate
