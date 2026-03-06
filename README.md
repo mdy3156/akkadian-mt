@@ -5,9 +5,9 @@ ByT5 を使って Deep Past Initiative - Machine Translation (Akkadian -> Englis
 ## Setup
 
 ```bash
-uv venv
+python -m venv .venv
 source .venv/bin/activate
-uv pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 ## Data
@@ -34,16 +34,14 @@ source,target
 ```bash
 !git clone <your-repo-url>
 %cd akkadian-mt
-!pip install uv
-!uv venv
-!uv pip install -r requirements.txt
+!pip install -r requirements.txt
 !bash scripts/run_train.sh data/raw/kaggle/train.csv '' outputs/byt5-base
 ```
 
 ## Train
 
 ```bash
-uv run python -m src.train \
+python -m src.train \
   --config configs/byt5_base.yaml \
   --train_path data/raw/kaggle/train.csv \
   --output_dir outputs/byt5-base
@@ -54,7 +52,7 @@ uv run python -m src.train \
 ## Inference
 
 ```bash
-uv run python -m src.infer \
+python -m src.infer \
   --model_path outputs/byt5-base/best_checkpoint \
   --input_path data/raw/kaggle/test.csv \
   --output_path outputs/predictions.csv
