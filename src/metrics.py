@@ -9,7 +9,7 @@ import evaluate
 import numpy as np
 from transformers import EvalPrediction, PreTrainedTokenizerBase
 
-from .preprocess import preprocess_english_text
+from .preprocess import postprocess_english_batch, preprocess_english_batch
 
 _BLEU = evaluate.load("sacrebleu")
 _CHRF = evaluate.load("chrf")
@@ -42,8 +42,8 @@ def decode_prediction_batch(predictions, tokenizer: PreTrainedTokenizerBase) -> 
 
 def postprocess_text(predictions: Iterable[str], references: Iterable[str]) -> Tuple[List[str], List[List[str]]]:
     """Normalize whitespace and package references for evaluate."""
-    preds = [preprocess_english_text(pred) for pred in predictions]
-    refs = [[preprocess_english_text(ref)] for ref in references]
+    preds = postprocess_english_batch(list(predictions))
+    refs = [[text] for text in preprocess_english_batch(list(references))]
     return preds, refs
 
 

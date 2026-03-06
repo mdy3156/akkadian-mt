@@ -18,6 +18,7 @@ from transformers import (
 
 from .data import TASK_PREFIX, build_hf_dataset, load_parallel_data, prepare_data_collator
 from .metrics import build_compute_metrics, decode_prediction_batch
+from .preprocess import postprocess_english_batch
 from .utils import create_logger, ensure_output_dir, list_checkpoints, load_yaml_config, save_config, save_json, set_seed
 
 
@@ -26,6 +27,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fine-tune ByT5 for Akkadian to English translation.")
     parser.add_argument("--config", required=True, help="Path to YAML config file.")
     parser.add_argument("--train_path", required=True, help="Path to training CSV.")
+    parser.add_argument(
+        "--extra_train_paths",
+        nargs="*",
+        default=None,
+        help="Optional extra training CSV paths. These are appended to the training split only.",
+    )
     parser.add_argument("--valid_path", default=None, help="Optional path to validation CSV.")
     parser.add_argument("--output_dir", required=True, help="Directory to save checkpoints and outputs.")
     parser.add_argument("--model_name", default=None, help="Optional model name override.")
@@ -90,21 +97,33 @@ def resolve_train_valid_dataframes(
     return training_df.reset_index(drop=True), validation_df.reset_index(drop=True)
 
 
+def append_extra_training_data(train_df: pd.DataFrame, extra_train_dfs: list[pd.DataFrame]) -> pd.DataFrame:
+    """Append additional training-only corpora to the base training dataframe."""
+    if not extra_train_dfs:
+        return train_df.reset_index(drop=True)
+    combined = pd.concat([train_df, *extra_train_dfs], ignore_index=True)
+    return combined.reset_index(drop=True)
+
+
 def save_validation_predictions(
     trainer: Seq2SeqTrainer,
     dataset,
     tokenizer,
     raw_valid_df: pd.DataFrame,
     output_path: Path,
+    logger,
 ) -> None:
     """Generate and save validation predictions to CSV."""
+    logger.info("Generating validation predictions for CSV export")
     prediction_output = trainer.predict(dataset, metric_key_prefix="predict")
     decoded_predictions = decode_prediction_batch(prediction_output.predictions, tokenizer)
+    decoded_predictions = postprocess_english_batch(decoded_predictions)
 
     result_df = raw_valid_df.copy()
     result_df["prefixed_source"] = result_df["source"].map(lambda value: TASK_PREFIX + value)
     result_df["prediction"] = decoded_predictions
     result_df.to_csv(output_path, index=False)
+    logger.info("Saved validation predictions to %s", output_path)
 
 
 def export_best_checkpoint(trainer: Seq2SeqTrainer, tokenizer, output_dir: Path, logger) -> Optional[Path]:
@@ -141,12 +160,20 @@ def main() -> None:
 
     logger.info("Loading data")
     train_df = load_parallel_data(args.train_path)
+    extra_train_dfs = [load_parallel_data(path) for path in (args.extra_train_paths or [])]
     valid_df = load_parallel_data(args.valid_path) if args.valid_path else None
     train_df, raw_valid_df = resolve_train_valid_dataframes(
         train_df=train_df,
         valid_df=valid_df,
         validation_split_ratio=float(config.get("validation_split_ratio", 0.05)),
         seed=int(config["seed"]),
+    )
+    train_df = append_extra_training_data(train_df, extra_train_dfs)
+    logger.info(
+        "Resolved datasets: train=%d rows, validation=%d rows, extra_train_files=%d",
+        len(train_df),
+        len(raw_valid_df),
+        len(extra_train_dfs),
     )
 
     dataset_dict = build_hf_dataset(
@@ -186,10 +213,11 @@ def main() -> None:
     trainer.save_model()
     tokenizer.save_pretrained(output_dir)
 
-    logger.info("Evaluating best model")
+    logger.info("Running final evaluation")
     eval_metrics = trainer.evaluate(metric_key_prefix="eval")
     metrics: Dict[str, Any] = {**train_result.metrics, **eval_metrics}
     save_json(metrics, output_dir / "all_results.json")
+    logger.info("Saved final metrics to %s", output_dir / "all_results.json")
 
     prediction_csv_path = output_dir / "validation_predictions.csv"
     save_validation_predictions(
@@ -198,8 +226,10 @@ def main() -> None:
         tokenizer=tokenizer,
         raw_valid_df=raw_valid_df,
         output_path=prediction_csv_path,
+        logger=logger,
     )
 
+    logger.info("Exporting best checkpoint snapshot")
     export_best_checkpoint(trainer, tokenizer, output_dir, logger)
 
     checkpoints = [str(path) for path in list_checkpoints(output_dir)]

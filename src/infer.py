@@ -11,7 +11,7 @@ import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 from .data import TASK_PREFIX
-from .preprocess import preprocess_akkadian_text
+from .preprocess import postprocess_english_batch, preprocess_akkadian_text
 from .utils import create_logger, ensure_output_dir
 
 
@@ -44,7 +44,7 @@ def generate_predictions(
             num_beams=num_beams,
         )
         predictions.extend(tokenizer.batch_decode(generated, skip_special_tokens=True))
-    return predictions
+    return postprocess_english_batch(predictions)
 
 
 def parse_args() -> argparse.Namespace:

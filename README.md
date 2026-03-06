@@ -28,6 +28,16 @@ source,target
 例:
 - `data/raw/kaggle/train.csv`
 - `data/raw/kaggle/test.csv`
+- `data/processed/evacun/train.csv`
+
+Evacun の `.txt` ペアから学習 CSV を作る例:
+
+```bash
+python scripts/build_evacun_csv.py \
+  --transcription_path data/raw/kaggle/evacun/transcription_train.txt \
+  --english_path data/raw/kaggle/evacun/english_train.txt \
+  --output_path data/processed/evacun/train.csv
+```
 
 ## Colab Example
 
@@ -35,7 +45,8 @@ source,target
 !git clone <your-repo-url>
 %cd akkadian-mt
 !pip install -r requirements.txt
-!bash scripts/run_train.sh data/raw/kaggle/train.csv '' outputs/byt5-base
+!python scripts/build_evacun_csv.py --transcription_path data/raw/kaggle/evacun/transcription_train.txt --english_path data/raw/kaggle/evacun/english_train.txt --output_path data/processed/evacun/train.csv
+!bash scripts/run_train.sh data/raw/kaggle/train.csv '' outputs/byt5-base configs/byt5_base.yaml data/processed/evacun/train.csv
 ```
 
 ## Train
@@ -44,10 +55,11 @@ source,target
 python -m src.train \
   --config configs/byt5_base.yaml \
   --train_path data/raw/kaggle/train.csv \
+  --extra_train_paths data/processed/evacun/train.csv \
   --output_dir outputs/byt5-base
 ```
 
-`--valid_path` を省略すると、config の `validation_split_ratio` に従って train から split します。
+`--valid_path` を省略すると、最初の `--train_path` で与えた Kaggle train からだけ validation を split します。`--extra_train_paths` で追加した Evacun は train にのみ入ります。
 
 ## Inference
 
@@ -71,6 +83,6 @@ python -m src.infer \
 ## Shell Scripts
 
 ```bash
-bash scripts/run_train.sh data/raw/kaggle/train.csv '' outputs/byt5-base
+bash scripts/run_train.sh data/raw/kaggle/train.csv '' outputs/byt5-base configs/byt5_base.yaml data/processed/evacun/train.csv
 bash scripts/run_infer.sh outputs/byt5-base/best_checkpoint data/raw/kaggle/test.csv outputs/predictions.csv
 ```
