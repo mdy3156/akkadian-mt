@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Dict, Iterable, List, Sequence, Tuple
+from typing import Dict, Iterable, List, Tuple
 
 import evaluate
 import numpy as np
@@ -13,6 +13,31 @@ from .preprocess import preprocess_english_text
 
 _BLEU = evaluate.load("sacrebleu")
 _CHRF = evaluate.load("chrf")
+
+
+def prepare_prediction_ids(predictions, tokenizer: PreTrainedTokenizerBase) -> np.ndarray:
+    """Normalize trainer predictions into valid token ids for decoding."""
+    prediction_array = predictions[0] if isinstance(predictions, tuple) else predictions
+    prediction_array = np.asarray(prediction_array)
+
+    # Some transformers versions return logits even with generate-based evaluation.
+    if prediction_array.ndim == 3:
+        prediction_array = prediction_array.argmax(axis=-1)
+
+    prediction_array = prediction_array.astype(np.int64, copy=False)
+    pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+    vocab_upper_bound = len(tokenizer) - 1
+    invalid_mask = (prediction_array < 0) | (prediction_array > vocab_upper_bound)
+    if invalid_mask.any():
+        prediction_array = prediction_array.copy()
+        prediction_array[invalid_mask] = pad_token_id
+    return prediction_array
+
+
+def decode_prediction_batch(predictions, tokenizer: PreTrainedTokenizerBase) -> List[str]:
+    """Decode trainer predictions safely across transformers versions."""
+    prediction_ids = prepare_prediction_ids(predictions, tokenizer)
+    return tokenizer.batch_decode(prediction_ids, skip_special_tokens=True)
 
 
 def postprocess_text(predictions: Iterable[str], references: Iterable[str]) -> Tuple[List[str], List[List[str]]]:
@@ -26,13 +51,9 @@ def build_compute_metrics(tokenizer: PreTrainedTokenizerBase):
     """Create a compute_metrics callback for Seq2SeqTrainer."""
 
     def compute_metrics(eval_prediction: EvalPrediction) -> Dict[str, float]:
-        predictions = eval_prediction.predictions
         labels = eval_prediction.label_ids
 
-        if isinstance(predictions, tuple):
-            predictions = predictions[0]
-
-        decoded_predictions = tokenizer.batch_decode(predictions, skip_special_tokens=True)
+        decoded_predictions = decode_prediction_batch(eval_prediction.predictions, tokenizer)
         labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
 

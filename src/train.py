@@ -17,7 +17,7 @@ from transformers import (
 )
 
 from .data import TASK_PREFIX, build_hf_dataset, load_parallel_data, prepare_data_collator
-from .metrics import build_compute_metrics
+from .metrics import build_compute_metrics, decode_prediction_batch
 from .utils import create_logger, ensure_output_dir, list_checkpoints, load_yaml_config, save_config, save_json, set_seed
 
 
@@ -99,10 +99,7 @@ def save_validation_predictions(
 ) -> None:
     """Generate and save validation predictions to CSV."""
     prediction_output = trainer.predict(dataset, metric_key_prefix="predict")
-    predictions = prediction_output.predictions
-    if isinstance(predictions, tuple):
-        predictions = predictions[0]
-    decoded_predictions = tokenizer.batch_decode(predictions, skip_special_tokens=True)
+    decoded_predictions = decode_prediction_batch(prediction_output.predictions, tokenizer)
 
     result_df = raw_valid_df.copy()
     result_df["prefixed_source"] = result_df["source"].map(lambda value: TASK_PREFIX + value)
