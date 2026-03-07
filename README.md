@@ -61,6 +61,22 @@ python -m src.train \
 
 `--valid_path` を省略すると、最初の `--train_path` で与えた Kaggle train からだけ validation を split します。`--extra_train_paths` で追加した Evacun は train にのみ入ります。
 
+公開済みの強い checkpoint から fine-tune したい場合は、`model_name` に Hugging Face 名ではなくローカルのモデルディレクトリを渡せます。Kaggle で配布されているモデルをダウンロードして展開した後、たとえば以下のように使えます。
+
+```bash
+python -m src.train \
+  --config configs/byt5_base.yaml \
+  --train_path data/raw/kaggle/train.csv \
+  --output_dir outputs/byt5-from-public \
+  --model_name /path/to/byt5-akkadian-optimized-34x
+```
+
+`scripts/run_train.sh` では 6 番目の引数で上書きできます。
+
+```bash
+bash scripts/run_train.sh data/raw/kaggle/train.csv '' outputs/byt5-from-public configs/byt5_base.yaml '' /path/to/byt5-akkadian-optimized-34x
+```
+
 ## Inference
 
 ```bash
