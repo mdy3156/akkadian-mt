@@ -66,6 +66,12 @@ _EXACT_FRAC_MAP = {
     "0.5": "½",
 }
 _SUB_X = "ₓ"
+_EDITORIAL_MARK_RE = re.compile(r"[⸢⸣⌈⌉]")
+_AT_ANNOTATION_RE = re.compile(r"@[\w.+-]+")
+_ASTERISK_RUN_RE = re.compile(r"\*+")
+_EN_BRACKETED_NOTE_RE = re.compile(r"\[[^\]]*\]")
+_EN_PAREN_NOTE_RE = re.compile(r"\((?:erased|restored|broken|fragmentary|illegible)[^)]*\)", re.IGNORECASE)
+_SPACE_AROUND_HYPHEN_RE = re.compile(r"\s*-\s*")
 _CHAR_TRANS = str.maketrans(
     {
         "ḫ": "h",
@@ -134,11 +140,15 @@ def _replace_exact_fraction(match: re.Match[str]) -> str:
 def preprocess_akkadian_text(text: str) -> str:
     """Apply the stronger transliteration normalization used for inference."""
     normalized = ascii_to_diacritics(text)
+    normalized = _EDITORIAL_MARK_RE.sub("", normalized)
+    normalized = _AT_ANNOTATION_RE.sub("", normalized)
+    normalized = _ASTERISK_RUN_RE.sub("", normalized)
     normalized = _DET_UPPER_RE.sub(r"\1", normalized)
     normalized = _DET_LOWER_RE.sub(r"{\1}", normalized)
     normalized = normalize_gaps(normalized)
     normalized = normalized.translate(_CHAR_TRANS)
     normalized = normalized.replace(_SUB_X, "")
+    normalized = _SPACE_AROUND_HYPHEN_RE.sub("-", normalized)
     normalized = _KUBABBAR_RE.sub("KÙ.BABBAR", normalized)
     normalized = _EXACT_FRAC_RE.sub(_replace_exact_fraction, normalized)
     normalized = canon_decimal(normalized)
@@ -172,8 +182,11 @@ def preprocess_english_text(text: str) -> str:
     normalized = normalized.replace("\u2019", "'")
     normalized = normalized.replace("\u201c", '"').replace("\u201d", '"')
     normalized = normalized.replace("\u00a0", " ")
+    normalized = _EN_BRACKETED_NOTE_RE.sub(" <gap> ", normalized)
+    normalized = _EN_PAREN_NOTE_RE.sub(" <gap> ", normalized)
     normalized = normalize_gaps(normalized)
     normalized = canon_decimal(normalized)
+    normalized = _PUNCT_SPACE_RE.sub(r"\1", normalized)
     normalized = _WHITESPACE_RE.sub(" ", normalized).strip()
     return normalized
 

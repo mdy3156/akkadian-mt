@@ -29,10 +29,21 @@ a-na e2-gal ...,to the palace ...
 
 - 列は `source,target` に固定です
 
+`data/eval.csv`
+
+```csv
+source,target
+a-na e2-gal ...,to the palace ...
+```
+
+- 任意です
+- `configs/train.yaml` で `eval_path` を指定すると、学習中 evaluation はこのファイルを使います
+- `eval_path` が無い場合だけ、`train_path` から `validation_split_ratio` で分割します
+
 ## Configs
 
-- [`configs/public_byt5_optimized.yaml`](/home/mdy/akkadian-mt/configs/public_byt5_optimized.yaml): fine-tune 用
-- [`configs/eval_public.yaml`](/home/mdy/akkadian-mt/configs/eval_public.yaml): 公開モデル評価用
+- [`configs/train.yaml`](/home/mdy/akkadian-mt/configs/train.yaml): fine-tune 用
+- [`configs/eval.yaml`](/home/mdy/akkadian-mt/configs/eval.yaml): 公開モデル評価用
 
 主なパラメータ:
 - `model_path`
@@ -47,7 +58,7 @@ a-na e2-gal ...,to the palace ...
 固定 seed で `data/train.csv` の一部を切り出して、公開モデルの素の性能を見ます。
 
 ```bash
-python -m src.evaluate_checkpoint --config configs/eval_public.yaml
+python -m src.evaluate_checkpoint --config configs/eval.yaml
 ```
 
 保存物:
@@ -59,8 +70,8 @@ python -m src.evaluate_checkpoint --config configs/eval_public.yaml
 ## Fine-tune
 
 ```bash
-python -m src.train --config configs/public_byt5_optimized.yaml
+python -m src.train --config configs/train.yaml
 ```
 
 別の公開モデルや出力先を使う場合も、CLI 引数ではなく config を編集します。
-学習時は `train_path` を seed 固定で train/validation に分割します。
+学習時は `eval_path` があればそれを評価に使い、無ければ `train_path` を seed 固定で train/validation に分割します。

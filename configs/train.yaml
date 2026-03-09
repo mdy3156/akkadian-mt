@@ -1,5 +1,6 @@
 model_path: models/byt5-akkadian-optimized-34x
 train_path: data/train.csv
+eval_path: data/eval.csv
 output_dir: outputs/public-finetune
 resume_from_checkpoint: null
 max_source_length: 768

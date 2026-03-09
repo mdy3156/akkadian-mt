@@ -70,10 +70,14 @@ def build_training_arguments(config: Dict[str, Any], output_dir: str) -> Seq2Seq
 
 def resolve_train_valid_dataframes(
     train_df: pd.DataFrame,
+    eval_df: Optional[pd.DataFrame],
     validation_split_ratio: float,
     seed: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Split the canonical training dataframe into train/validation subsets."""
+    if eval_df is not None:
+        return train_df.reset_index(drop=True), eval_df.reset_index(drop=True)
+
     if not 0.0 < validation_split_ratio < 1.0:
         raise ValueError("validation_split_ratio must be between 0 and 1.")
 
@@ -145,8 +149,10 @@ def main() -> None:
 
     logger.info("Loading data")
     train_df = load_parallel_data(config["train_path"])
+    eval_df = load_parallel_data(config["eval_path"]) if config.get("eval_path") else None
     train_df, raw_valid_df = resolve_train_valid_dataframes(
         train_df=train_df,
+        eval_df=eval_df,
         validation_split_ratio=float(config.get("validation_split_ratio", 0.05)),
         seed=int(config["seed"]),
     )

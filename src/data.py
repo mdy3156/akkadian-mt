@@ -30,6 +30,8 @@ def load_parallel_data(path: str) -> pd.DataFrame:
         missing = ", ".join(sorted(missing_columns))
         raise ValueError(f"Parallel CSV must contain columns: {missing}")
 
+    dataframe["raw_source"] = dataframe["source"].fillna("").astype(str)
+    dataframe["raw_target"] = dataframe["target"].fillna("").astype(str)
     dataframe["source"] = dataframe["source"].fillna("").map(preprocess_akkadian_text)
     dataframe["target"] = dataframe["target"].fillna("").map(preprocess_english_text)
 
