@@ -9,4 +9,5 @@ checkpoints/
 *.safetensors
 wandb/
 logs/
+models/
 data/

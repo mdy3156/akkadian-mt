@@ -47,6 +47,30 @@ def postprocess_text(predictions: Iterable[str], references: Iterable[str]) -> T
     return preds, refs
 
 
+def compute_translation_metrics(predictions: Iterable[str], references: Iterable[str]) -> Dict[str, float]:
+    """Compute BLEU, chrF++, and combined score for decoded text pairs."""
+    decoded_predictions, decoded_labels = postprocess_text(predictions, references)
+    bleu_result = _BLEU.compute(predictions=decoded_predictions, references=decoded_labels)
+    chrf_result = _CHRF.compute(predictions=decoded_predictions, references=decoded_labels, word_order=2)
+
+    bleu = float(bleu_result["score"])
+    chrf = float(chrf_result["score"])
+    combined_score = math.sqrt(max(bleu, 0.0) * max(chrf, 0.0))
+    prediction_char_lengths = np.array([len(text) for text in decoded_predictions], dtype=np.float64)
+    label_char_lengths = np.array([len(texts[0]) for texts in decoded_labels], dtype=np.float64)
+    prediction_word_lengths = np.array([len(text.split()) for text in decoded_predictions], dtype=np.float64)
+    label_word_lengths = np.array([len(texts[0].split()) for texts in decoded_labels], dtype=np.float64)
+    return {
+        "bleu": round(bleu, 4),
+        "chrf++": round(chrf, 4),
+        "combined_score": round(combined_score, 4),
+        "avg_prediction_chars": round(float(prediction_char_lengths.mean()), 4),
+        "avg_target_chars": round(float(label_char_lengths.mean()), 4),
+        "avg_prediction_words": round(float(prediction_word_lengths.mean()), 4),
+        "avg_target_words": round(float(label_word_lengths.mean()), 4),
+    }
+
+
 def build_compute_metrics(tokenizer: PreTrainedTokenizerBase):
     """Create a compute_metrics callback for Seq2SeqTrainer."""
 
@@ -56,20 +80,6 @@ def build_compute_metrics(tokenizer: PreTrainedTokenizerBase):
         decoded_predictions = decode_prediction_batch(eval_prediction.predictions, tokenizer)
         labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-
-        decoded_predictions, decoded_labels = postprocess_text(decoded_predictions, decoded_labels)
-
-        bleu_result = _BLEU.compute(predictions=decoded_predictions, references=decoded_labels)
-        chrf_result = _CHRF.compute(predictions=decoded_predictions, references=decoded_labels, word_order=2)
-
-        bleu = float(bleu_result["score"])
-        chrf = float(chrf_result["score"])
-        combined_score = math.sqrt(max(bleu, 0.0) * max(chrf, 0.0))
-
-        return {
-            "bleu": round(bleu, 4),
-            "chrf++": round(chrf, 4),
-            "combined_score": round(combined_score, 4),
-        }
+        return compute_translation_metrics(decoded_predictions, decoded_labels)
 
     return compute_metrics

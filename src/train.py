@@ -24,19 +24,8 @@ from .utils import create_logger, ensure_output_dir, list_checkpoints, load_yaml
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Fine-tune ByT5 for Akkadian to English translation.")
+    parser = argparse.ArgumentParser(description="Fine-tune a public Akkadian MT checkpoint.")
     parser.add_argument("--config", required=True, help="Path to YAML config file.")
-    parser.add_argument("--train_path", required=True, help="Path to training CSV.")
-    parser.add_argument(
-        "--extra_train_paths",
-        nargs="*",
-        default=None,
-        help="Optional extra training CSV paths. These are appended to the training split only.",
-    )
-    parser.add_argument("--valid_path", default=None, help="Optional path to validation CSV.")
-    parser.add_argument("--output_dir", required=True, help="Directory to save checkpoints and outputs.")
-    parser.add_argument("--model_name", default=None, help="Optional model name override.")
-    parser.add_argument("--resume_from_checkpoint", default=None, help="Checkpoint path to resume from.")
     return parser.parse_args()
 
 
@@ -81,28 +70,26 @@ def build_training_arguments(config: Dict[str, Any], output_dir: str) -> Seq2Seq
 
 def resolve_train_valid_dataframes(
     train_df: pd.DataFrame,
-    valid_df: Optional[pd.DataFrame],
     validation_split_ratio: float,
     seed: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Resolve explicit train/validation dataframes."""
-    if valid_df is not None:
-        return train_df.reset_index(drop=True), valid_df.reset_index(drop=True)
-
+    """Split the canonical training dataframe into train/validation subsets."""
     if not 0.0 < validation_split_ratio < 1.0:
-        raise ValueError("validation_split_ratio must be between 0 and 1 when valid_path is not provided.")
+        raise ValueError("validation_split_ratio must be between 0 and 1.")
 
     validation_df = train_df.sample(frac=validation_split_ratio, random_state=seed)
     training_df = train_df.drop(index=validation_df.index)
     return training_df.reset_index(drop=True), validation_df.reset_index(drop=True)
 
 
-def append_extra_training_data(train_df: pd.DataFrame, extra_train_dfs: list[pd.DataFrame]) -> pd.DataFrame:
-    """Append additional training-only corpora to the base training dataframe."""
-    if not extra_train_dfs:
-        return train_df.reset_index(drop=True)
-    combined = pd.concat([train_df, *extra_train_dfs], ignore_index=True)
-    return combined.reset_index(drop=True)
+def sample_eval_dataframe(valid_df: pd.DataFrame, eval_subset_ratio: float, seed: int) -> pd.DataFrame:
+    """Deterministically subsample the validation dataframe for faster eval."""
+    if not 0.0 < eval_subset_ratio <= 1.0:
+        raise ValueError("eval_subset_ratio must be in the interval (0, 1].")
+    if eval_subset_ratio >= 1.0:
+        return valid_df.reset_index(drop=True)
+    sampled = valid_df.sample(frac=eval_subset_ratio, random_state=seed)
+    return sampled.reset_index(drop=True)
 
 
 def save_validation_predictions(
@@ -146,34 +133,32 @@ def main() -> None:
     """Run fine-tuning end to end."""
     args = parse_args()
     config = load_yaml_config(args.config)
-    if args.model_name:
-        config["model_name"] = args.model_name
 
-    output_dir = ensure_output_dir(args.output_dir)
+    output_dir = ensure_output_dir(config["output_dir"])
     logger = create_logger(output_dir)
     save_config(config, output_dir)
     set_seed(int(config["seed"]))
 
-    logger.info("Loading tokenizer and model: %s", config["model_name"])
-    tokenizer = AutoTokenizer.from_pretrained(config["model_name"])
-    model = AutoModelForSeq2SeqLM.from_pretrained(config["model_name"])
+    logger.info("Loading tokenizer and model: %s", config["model_path"])
+    tokenizer = AutoTokenizer.from_pretrained(config["model_path"])
+    model = AutoModelForSeq2SeqLM.from_pretrained(config["model_path"])
 
     logger.info("Loading data")
-    train_df = load_parallel_data(args.train_path)
-    extra_train_dfs = [load_parallel_data(path) for path in (args.extra_train_paths or [])]
-    valid_df = load_parallel_data(args.valid_path) if args.valid_path else None
+    train_df = load_parallel_data(config["train_path"])
     train_df, raw_valid_df = resolve_train_valid_dataframes(
         train_df=train_df,
-        valid_df=valid_df,
         validation_split_ratio=float(config.get("validation_split_ratio", 0.05)),
         seed=int(config["seed"]),
     )
-    train_df = append_extra_training_data(train_df, extra_train_dfs)
+    raw_valid_df = sample_eval_dataframe(
+        valid_df=raw_valid_df,
+        eval_subset_ratio=float(config.get("eval_subset_ratio", 1.0)),
+        seed=int(config["seed"]),
+    )
     logger.info(
-        "Resolved datasets: train=%d rows, validation=%d rows, extra_train_files=%d",
+        "Resolved datasets: train=%d rows, validation=%d rows",
         len(train_df),
         len(raw_valid_df),
-        len(extra_train_dfs),
     )
 
     dataset_dict = build_hf_dataset(
@@ -209,7 +194,7 @@ def main() -> None:
     )
 
     logger.info("Starting training")
-    train_result = trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
+    train_result = trainer.train(resume_from_checkpoint=config.get("resume_from_checkpoint"))
     trainer.save_model()
     tokenizer.save_pretrained(output_dir)
 

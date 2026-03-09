@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Iterable, List, Sequence
+from typing import List, Sequence
 
 _V2_RE = re.compile(r"([aAeEiIuU])(?:2|₂)")
 _V3_RE = re.compile(r"([aAeEiIuU])(?:3|₃)")
@@ -20,18 +20,28 @@ _ALLOWED_FRACS = [
     (5 / 6, "0.83333"),
 ]
 _FRAC_TOL = 2e-3
-_FLOAT_RE = re.compile(r"(?<![\w/])(\d+\.\d{1,})(?![\w/])")
-_TAG_BIGGAP_RE = re.compile(r"<\s*big[\s_\-]*gap\s*>", re.IGNORECASE)
-_TAG_GAP_RE = re.compile(r"<\s*gap\s*>", re.IGNORECASE)
-_BARE_BIGGAP_RE = re.compile(r"\bbig[\s_\-]*gap\b", re.IGNORECASE)
-_ELLIPSIS_RE = re.compile(r"(?:\.{3,}|…+|\[\.+\])")
-_BRACKET_X_RE = re.compile(r"(?:\[\s*x\s*\]|\(\s*x\s*\))", re.IGNORECASE)
-_XTOKEN_RUN_RE = re.compile(r"\bx(?:\s+x)+\b", re.IGNORECASE)
-_XRUN_RE = re.compile(r"(?<!\w)x{2,}(?!\w)", re.IGNORECASE)
-_XTOK_RE = re.compile(r"(?<!\w)x(?!\w)", re.IGNORECASE)
+_FLOAT_RE = re.compile(r"(?<![\w/])(\d+\.\d{4,})(?![\w/])")
 _WHITESPACE_RE = re.compile(r"\s+")
-_DET_RE = re.compile(r"\(([A-Za-z0-9]{1,4})\)")
+_GAP_UNIFIED_RE = re.compile(
+    r"<\s*big[\s_\-]*gap\s*>"
+    r"|<\s*gap\s*>"
+    r"|\bbig[\s_\-]*gap\b"
+    r"|\bx(?:\s+x)+\b"
+    r"|\.{3,}|…+|\[\.+\]"
+    r"|\[\s*x\s*\]|\(\s*x\s*\)"
+    r"|(?<!\w)x{2,}(?!\w)"
+    r"|(?<!\w)x(?!\w)"
+    r"|\(\s*large\s+break\s*\)"
+    r"|\(\s*break\s*\)"
+    r"|\(\s*\d+\s+broken\s+lines?\s*\)",
+    re.IGNORECASE,
+)
+_UNICODE_UPPER = r"A-ZŠṬṢḪ\u00C0-\u00D6\u00D8-\u00DE\u0160\u1E00-\u1EFF"
+_UNICODE_LOWER = r"a-zšṭṣḫ\u00E0-\u00F6\u00F8-\u00FF\u0161\u1E01-\u1EFF"
+_DET_UPPER_RE = re.compile(r"\(([" + _UNICODE_UPPER + r"0-9]{1,6})\)")
+_DET_LOWER_RE = re.compile(r"\(([" + _UNICODE_LOWER + r"]{1,4})\)")
 _PN_RE = re.compile(r"\bPN\b")
+_KUBABBAR_RE = re.compile(r"KÙ\.B\.")
 _MONTH_RE = re.compile(r"\bMonth\s+(XII|XI|X|IX|VIII|VII|VI|V|IV|III|II|I)\b", re.IGNORECASE)
 _ROMAN2INT = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10, "XI": 11, "XII": 12}
 _SOFT_GRAM_RE = re.compile(
@@ -44,6 +54,17 @@ _QUOTES_RE = re.compile(r"[\u201c\u201d\u2018\u2019\"']")
 _REPEAT_WORD_RE = re.compile(r"\b(\w+)(?:\s+\1\b)+")
 _REPEAT_PUNCT_RE = re.compile(r"([.,])\1+")
 _PUNCT_SPACE_RE = re.compile(r"\s+([.,:])")
+_EXACT_FRAC_RE = re.compile(r"0\.8333|0\.6666|0\.3333|0\.1666|0\.625|0\.75|0\.25|0\.5")
+_EXACT_FRAC_MAP = {
+    "0.8333": "⅚",
+    "0.6666": "⅔",
+    "0.3333": "⅓",
+    "0.1666": "⅙",
+    "0.625": "⅝",
+    "0.75": "¾",
+    "0.25": "¼",
+    "0.5": "½",
+}
 _SUB_X = "ₓ"
 _CHAR_TRANS = str.maketrans(
     {
@@ -101,25 +122,25 @@ def canon_decimal(text: str) -> str:
 def normalize_gaps(text: str) -> str:
     """Normalize gap markers and x-runs into a shared <gap> token."""
     normalized = str(text or "")
-    normalized = _TAG_BIGGAP_RE.sub("<gap>", normalized)
-    normalized = _TAG_GAP_RE.sub("<gap>", normalized)
-    normalized = _BARE_BIGGAP_RE.sub("<gap>", normalized)
-    normalized = _XTOKEN_RUN_RE.sub("<gap>", normalized)
-    normalized = _ELLIPSIS_RE.sub("<gap>", normalized)
-    normalized = _BRACKET_X_RE.sub("<gap>", normalized)
-    normalized = _XRUN_RE.sub("<gap>", normalized)
-    normalized = _XTOK_RE.sub("<gap>", normalized)
+    normalized = _GAP_UNIFIED_RE.sub("<gap>", normalized)
     normalized = re.sub(r"(?:\s*<gap>\s*){2,}", " <gap> ", normalized)
     return normalized
+
+
+def _replace_exact_fraction(match: re.Match[str]) -> str:
+    return _EXACT_FRAC_MAP[match.group(0)]
 
 
 def preprocess_akkadian_text(text: str) -> str:
     """Apply the stronger transliteration normalization used for inference."""
     normalized = ascii_to_diacritics(text)
-    normalized = _DET_RE.sub(r"{\1}", normalized)
+    normalized = _DET_UPPER_RE.sub(r"\1", normalized)
+    normalized = _DET_LOWER_RE.sub(r"{\1}", normalized)
     normalized = normalize_gaps(normalized)
     normalized = normalized.translate(_CHAR_TRANS)
     normalized = normalized.replace(_SUB_X, "")
+    normalized = _KUBABBAR_RE.sub("KÙ.BABBAR", normalized)
+    normalized = _EXACT_FRAC_RE.sub(_replace_exact_fraction, normalized)
     normalized = canon_decimal(normalized)
     normalized = _WHITESPACE_RE.sub(" ", normalized).strip()
     return normalized

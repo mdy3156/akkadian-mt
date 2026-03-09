@@ -1,4 +1,4 @@
-"""Shared utilities for training and inference scripts."""
+"""Shared utilities for training and evaluation scripts."""
 
 from __future__ import annotations
 
@@ -80,3 +80,35 @@ def list_checkpoints(output_dir: str | Path) -> List[Path]:
     base = Path(output_dir)
     checkpoints = [path for path in base.glob("checkpoint-*") if path.is_dir()]
     return sorted(checkpoints, key=lambda path: int(path.name.split("-")[-1]))
+
+
+@torch.inference_mode()
+def generate_predictions(
+    model,
+    tokenizer,
+    texts: List[str],
+    batch_size: int,
+    max_source_length: int,
+    max_new_tokens: int,
+    num_beams: int,
+    device: torch.device,
+) -> List[str]:
+    """Run batched text generation."""
+    predictions: List[str] = []
+    for start in range(0, len(texts), batch_size):
+        batch_texts = texts[start : start + batch_size]
+        encoded = tokenizer(
+            batch_texts,
+            padding=True,
+            truncation=True,
+            max_length=max_source_length,
+            return_tensors="pt",
+        )
+        encoded = {key: value.to(device) for key, value in encoded.items()}
+        generated = model.generate(
+            **encoded,
+            max_new_tokens=max_new_tokens,
+            num_beams=num_beams,
+        )
+        predictions.extend(tokenizer.batch_decode(generated, skip_special_tokens=True))
+    return predictions

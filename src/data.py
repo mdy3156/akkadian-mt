@@ -12,21 +12,10 @@ from transformers import DataCollatorForSeq2Seq, PreTrainedTokenizerBase
 from .preprocess import preprocess_akkadian_text, preprocess_english_text
 
 TASK_PREFIX = "translate Akkadian to English: "
-SOURCE_CANDIDATES = ("source", "transliteration")
-TARGET_CANDIDATES = ("target", "translation")
-
-
-def _resolve_column_name(columns: list[str], candidates: tuple[str, ...], role: str) -> str:
-    """Resolve a semantic column name from known aliases."""
-    for candidate in candidates:
-        if candidate in columns:
-            return candidate
-    expected = ", ".join(candidates)
-    raise ValueError(f"CSV file must contain one of the following {role} columns: {expected}")
 
 
 def load_parallel_data(path: str) -> pd.DataFrame:
-    """Load a parallel CSV file with source/target or Kaggle alias columns."""
+    """Load a canonical parallel CSV file with source/target columns."""
     try:
         dataframe = pd.read_csv(path)
     except FileNotFoundError as exc:
@@ -35,16 +24,14 @@ def load_parallel_data(path: str) -> pd.DataFrame:
         raise ValueError(f"Failed to read CSV file: {path}") from exc
 
     dataframe = dataframe.copy()
-    columns = list(dataframe.columns)
-    source_column = _resolve_column_name(columns, SOURCE_CANDIDATES, "source")
-    target_column = _resolve_column_name(columns, TARGET_CANDIDATES, "target")
+    required_columns = {"source", "target"}
+    missing_columns = required_columns - set(dataframe.columns)
+    if missing_columns:
+        missing = ", ".join(sorted(missing_columns))
+        raise ValueError(f"Parallel CSV must contain columns: {missing}")
 
-    dataframe = dataframe.rename(columns={source_column: "source", target_column: "target"})
     dataframe["source"] = dataframe["source"].fillna("").map(preprocess_akkadian_text)
     dataframe["target"] = dataframe["target"].fillna("").map(preprocess_english_text)
-
-    if "id" in dataframe.columns:
-        dataframe["id"] = dataframe["id"].fillna("")
 
     dataframe = dataframe[(dataframe["source"] != "") & (dataframe["target"] != "")].reset_index(drop=True)
     if dataframe.empty:
@@ -107,14 +94,16 @@ def build_hf_dataset(
         max_target_length=max_target_length,
     )
 
-    remove_columns = dataset_dict["train"].column_names
-    return dataset_dict.map(
-        tokenize_fn,
-        batched=True,
-        num_proc=preprocessing_num_workers,
-        remove_columns=remove_columns,
-        desc="Tokenizing datasets",
-    )
+    tokenized_splits = {}
+    for split_name, split_dataset in dataset_dict.items():
+        tokenized_splits[split_name] = split_dataset.map(
+            tokenize_fn,
+            batched=True,
+            num_proc=preprocessing_num_workers,
+            remove_columns=split_dataset.column_names,
+            desc=f"Tokenizing {split_name} dataset",
+        )
+    return DatasetDict(tokenized_splits)
 
 
 def prepare_data_collator(

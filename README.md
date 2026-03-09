@@ -1,6 +1,14 @@
 # akkadian-mt
 
-ByT5 を使って Deep Past Initiative - Machine Translation (Akkadian -> English) 向けに fine-tuning / inference を行う最小構成の実験基盤です。
+公開済み Akkadian MT checkpoint を評価し、`data/train.csv` で fine-tune するための最小構成です。実行設定はすべて `configs/` の YAML で管理します。
+
+## Scope
+
+残している機能は 2 つだけです。
+- 公開モデルの評価
+- 公開モデルの fine-tune
+
+学習データ変換や追加コーパス結合はこのリポジトリでは扱いません。
 
 ## Setup
 
@@ -10,95 +18,49 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Data
+## Data Format
 
-学習データは CSV を想定します。以下のどちらかの列名セットに対応します。
-- `source`, `target`
-- Kaggle 形式の `transliteration`, `translation`
+`data/train.csv`
 
 ```csv
 source,target
-"a-na e2-gal ...","to the palace ..."
+a-na e2-gal ...,to the palace ...
 ```
 
-推論入力は以下のどちらかに対応します。
-- `source`
-- Kaggle `test.csv` の `transliteration`
+- 列は `source,target` に固定です
 
-例:
-- `data/raw/kaggle/train.csv`
-- `data/raw/kaggle/test.csv`
-- `data/processed/evacun/train.csv`
+## Configs
 
-Evacun の `.txt` ペアから学習 CSV を作る例:
+- [`configs/public_byt5_optimized.yaml`](/home/mdy/akkadian-mt/configs/public_byt5_optimized.yaml): fine-tune 用
+- [`configs/eval_public.yaml`](/home/mdy/akkadian-mt/configs/eval_public.yaml): 公開モデル評価用
+
+主なパラメータ:
+- `model_path`
+- `train_path` / `input_path`
+- `output_dir`
+- `sample_ratio`
+- `seed`
+- generation 設定
+
+## Evaluate Public Model
+
+固定 seed で `data/train.csv` の一部を切り出して、公開モデルの素の性能を見ます。
 
 ```bash
-python scripts/build_evacun_csv.py \
-  --transcription_path data/raw/kaggle/evacun/transcription_train.txt \
-  --english_path data/raw/kaggle/evacun/english_train.txt \
-  --output_path data/processed/evacun/train.csv
+python -m src.evaluate_checkpoint --config configs/eval_public.yaml
 ```
 
-## Colab Example
+保存物:
+- `eval_metrics.json`
+- `eval_predictions.csv`
+
+`eval_predictions.csv` には `source_raw`, `source_preprocessed`, `prediction`, `target` を保存します。識別用の `id` は内部で連番を振ります。
+
+## Fine-tune
 
 ```bash
-!git clone <your-repo-url>
-%cd akkadian-mt
-!pip install -r requirements.txt
-!python scripts/build_evacun_csv.py --transcription_path data/raw/kaggle/evacun/transcription_train.txt --english_path data/raw/kaggle/evacun/english_train.txt --output_path data/processed/evacun/train.csv
-!bash scripts/run_train.sh data/raw/kaggle/train.csv '' outputs/byt5-base configs/byt5_base.yaml data/processed/evacun/train.csv
+python -m src.train --config configs/public_byt5_optimized.yaml
 ```
 
-## Train
-
-```bash
-python -m src.train \
-  --config configs/byt5_base.yaml \
-  --train_path data/raw/kaggle/train.csv \
-  --extra_train_paths data/processed/evacun/train.csv \
-  --output_dir outputs/byt5-base
-```
-
-`--valid_path` を省略すると、最初の `--train_path` で与えた Kaggle train からだけ validation を split します。`--extra_train_paths` で追加した Evacun は train にのみ入ります。
-
-公開済みの強い checkpoint から fine-tune したい場合は、`model_name` に Hugging Face 名ではなくローカルのモデルディレクトリを渡せます。Kaggle で配布されているモデルをダウンロードして展開した後、たとえば以下のように使えます。
-
-```bash
-python -m src.train \
-  --config configs/byt5_base.yaml \
-  --train_path data/raw/kaggle/train.csv \
-  --output_dir outputs/byt5-from-public \
-  --model_name /path/to/byt5-akkadian-optimized-34x
-```
-
-`scripts/run_train.sh` では 6 番目の引数で上書きできます。
-
-```bash
-bash scripts/run_train.sh data/raw/kaggle/train.csv '' outputs/byt5-from-public configs/byt5_base.yaml '' /path/to/byt5-akkadian-optimized-34x
-```
-
-## Inference
-
-```bash
-python -m src.infer \
-  --model_path outputs/byt5-base/best_checkpoint \
-  --input_path data/raw/kaggle/test.csv \
-  --output_path outputs/predictions.csv
-```
-
-## Outputs
-
-`output_dir` 以下に主に次を保存します。
-- `config.yaml`: 実行時設定
-- `trainer_state.json`: Trainer 状態
-- `all_results.json`: 最終 metrics
-- `validation_predictions.csv`: valid 推論結果
-- `checkpoint-*`: 中間 checkpoint
-- `best_checkpoint/`: Kaggle notebook 推論へ持ち込みやすい最良 checkpoint のコピー
-
-## Shell Scripts
-
-```bash
-bash scripts/run_train.sh data/raw/kaggle/train.csv '' outputs/byt5-base configs/byt5_base.yaml data/processed/evacun/train.csv
-bash scripts/run_infer.sh outputs/byt5-base/best_checkpoint data/raw/kaggle/test.csv outputs/predictions.csv
-```
+別の公開モデルや出力先を使う場合も、CLI 引数ではなく config を編集します。
+学習時は `train_path` を seed 固定で train/validation に分割します。
