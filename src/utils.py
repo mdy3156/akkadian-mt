@@ -11,6 +11,7 @@ from typing import Any, Dict, List
 import numpy as np
 import torch
 import yaml
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 
 def set_seed(seed: int) -> None:
@@ -80,6 +81,19 @@ def list_checkpoints(output_dir: str | Path) -> List[Path]:
     base = Path(output_dir)
     checkpoints = [path for path in base.glob("checkpoint-*") if path.is_dir()]
     return sorted(checkpoints, key=lambda path: int(path.name.split("-")[-1]))
+
+
+def load_seq2seq_checkpoint(model_path: str):
+    """Load a tokenizer and seq2seq model from a local path or HF model id."""
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
+
+    # Prefer max_new_tokens from configs and avoid inherited max_length warnings.
+    generation_config = getattr(model, "generation_config", None)
+    if generation_config is not None and hasattr(generation_config, "max_length"):
+        generation_config.max_length = None
+
+    return tokenizer, model
 
 
 @torch.inference_mode()

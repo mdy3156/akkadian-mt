@@ -6,12 +6,19 @@ import argparse
 import numpy as np
 import pandas as pd
 import torch
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 from .data import TASK_PREFIX
 from .metrics import compute_translation_metrics
 from .preprocess import preprocess_akkadian_text, preprocess_english_text
-from .utils import create_logger, ensure_output_dir, generate_predictions, load_yaml_config, save_json, set_seed
+from .utils import (
+    create_logger,
+    ensure_output_dir,
+    generate_predictions,
+    load_seq2seq_checkpoint,
+    load_yaml_config,
+    save_json,
+    set_seed,
+)
 
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments."""
@@ -67,8 +74,7 @@ def main() -> None:
     logger.info("Evaluation rows: %d", len(eval_df))
 
     logger.info("Loading model from %s", config["model_path"])
-    tokenizer = AutoTokenizer.from_pretrained(config["model_path"])
-    model = AutoModelForSeq2SeqLM.from_pretrained(config["model_path"])
+    tokenizer, model = load_seq2seq_checkpoint(config["model_path"])
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     model.eval()

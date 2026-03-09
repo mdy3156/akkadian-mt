@@ -1,9 +1,9 @@
-model_path: models/byt5-akkadian-optimized-34x
-input_path: data/train.csv
-output_dir: outputs/eval-public
-sample_ratio: 0.1
+model_path: models/akkadian-tuyoi
+input_path: data/eval.csv
+output_dir: outputs/eval-public-tuyoi
+sample_ratio: 1.0
 seed: 42
-batch_size: 8
-max_source_length: 768
-max_new_tokens: 256
+batch_size: 16
+max_source_length: 512
+max_new_tokens: 512
 num_beams: 4

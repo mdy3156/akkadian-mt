@@ -1,6 +1,6 @@
 # akkadian-mt
 
-公開済み Akkadian MT checkpoint を評価し、`data/train.csv` で fine-tune するための最小構成です。実行設定はすべて `configs/` の YAML で管理します。
+公開済み Akkadian MT checkpoint または Hugging Face model ID を評価し、`data/train.csv` で fine-tune するための最小構成です。実行設定はすべて `configs/` の YAML で管理します。
 
 ## Scope
 
@@ -44,6 +44,8 @@ a-na e2-gal ...,to the palace ...
 
 - [`configs/train.yaml`](/home/mdy/akkadian-mt/configs/train.yaml): fine-tune 用
 - [`configs/eval.yaml`](/home/mdy/akkadian-mt/configs/eval.yaml): 公開モデル評価用
+- [`configs/train_byt5_large.yaml`](/home/mdy/akkadian-mt/configs/train_byt5_large.yaml): `google/byt5-large` fine-tune 用
+- [`configs/eval_byt5_large.yaml`](/home/mdy/akkadian-mt/configs/eval_byt5_large.yaml): `google/byt5-large` 評価用
 
 主なパラメータ:
 - `model_path`
@@ -53,12 +55,22 @@ a-na e2-gal ...,to the palace ...
 - `seed`
 - generation 設定
 
+`model_path` には次のどちらも指定できます。
+- ローカル checkpoint ディレクトリ
+- Hugging Face model ID 例: `google/byt5-large`
+
 ## Evaluate Public Model
 
 固定 seed で `data/train.csv` の一部を切り出して、公開モデルの素の性能を見ます。
 
 ```bash
 python -m src.evaluate_checkpoint --config configs/eval.yaml
+```
+
+`google/byt5-large` を直接評価する場合:
+
+```bash
+python -m src.evaluate_checkpoint --config configs/eval_byt5_large.yaml
 ```
 
 保存物:
@@ -75,3 +87,14 @@ python -m src.train --config configs/train.yaml
 
 別の公開モデルや出力先を使う場合も、CLI 引数ではなく config を編集します。
 学習時は `eval_path` があればそれを評価に使い、無ければ `train_path` を seed 固定で train/validation に分割します。
+
+`google/byt5-large` を直接 fine-tune する場合:
+
+```bash
+python -m src.train --config configs/train_byt5_large.yaml
+```
+
+`byt5-large` は重いので、まずは次を前提にしてください。
+- A100 以上
+- `bf16: true`
+- `per_device_train_batch_size: 1`

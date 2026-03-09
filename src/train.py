@@ -10,8 +10,6 @@ from typing import Any, Dict, Optional
 
 import pandas as pd
 from transformers import (
-    AutoModelForSeq2SeqLM,
-    AutoTokenizer,
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments,
 )
@@ -19,7 +17,16 @@ from transformers import (
 from .data import TASK_PREFIX, build_hf_dataset, load_parallel_data, prepare_data_collator
 from .metrics import build_compute_metrics, decode_prediction_batch
 from .preprocess import postprocess_english_batch
-from .utils import create_logger, ensure_output_dir, list_checkpoints, load_yaml_config, save_config, save_json, set_seed
+from .utils import (
+    create_logger,
+    ensure_output_dir,
+    list_checkpoints,
+    load_seq2seq_checkpoint,
+    load_yaml_config,
+    save_config,
+    save_json,
+    set_seed,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -144,8 +151,7 @@ def main() -> None:
     set_seed(int(config["seed"]))
 
     logger.info("Loading tokenizer and model: %s", config["model_path"])
-    tokenizer = AutoTokenizer.from_pretrained(config["model_path"])
-    model = AutoModelForSeq2SeqLM.from_pretrained(config["model_path"])
+    tokenizer, model = load_seq2seq_checkpoint(config["model_path"])
 
     logger.info("Loading data")
     train_df = load_parallel_data(config["train_path"])
