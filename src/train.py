@@ -175,12 +175,13 @@ def main() -> None:
 
     dataset_dict = build_hf_dataset(
         train_df=train_df,
-        valid_df=raw_valid_df,
         tokenizer=tokenizer,
         max_source_length=int(config["max_source_length"]),
         max_target_length=int(config["max_target_length"]),
+        valid_df=raw_valid_df,
         seed=int(config["seed"]),
         preprocessing_num_workers=config.get("preprocessing_num_workers"),
+        bidirectional_augmentation=bool(config.get("bidirectional_augmentation", False)),
     )
 
     training_args = build_training_arguments(config, str(output_dir))

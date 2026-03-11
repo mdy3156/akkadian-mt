@@ -54,10 +54,17 @@ a-na e2-gal ...,to the palace ...
 - `sample_ratio`
 - `seed`
 - generation 設定
+- `bidirectional_augmentation`
 
 `model_path` には次のどちらも指定できます。
 - ローカル checkpoint ディレクトリ
 - Hugging Face model ID 例: `google/byt5-large`
+
+`bidirectional_augmentation: true` にすると、train データだけ次の 2 方向へ増やします。
+- `translate Akkadian to English: source -> target`
+- `translate English to Akkadian: target -> source`
+
+validation / evaluation は従来どおり Akkadian -> English のみです。
 
 ## Evaluate Public Model
 

@@ -30,3 +30,4 @@ logging_strategy: steps
 validation_split_ratio: 0.1
 eval_subset_ratio: 0.3
 preprocessing_num_workers: null
+bidirectional_augmentation: false

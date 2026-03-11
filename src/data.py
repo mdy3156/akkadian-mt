@@ -12,6 +12,7 @@ from transformers import DataCollatorForSeq2Seq, PreTrainedTokenizerBase
 from .preprocess import preprocess_akkadian_text, preprocess_english_text
 
 TASK_PREFIX = "translate Akkadian to English: "
+REVERSE_TASK_PREFIX = "translate English to Akkadian: "
 
 
 def load_parallel_data(path: str) -> pd.DataFrame:
@@ -24,6 +25,10 @@ def load_parallel_data(path: str) -> pd.DataFrame:
         raise ValueError(f"Failed to read CSV file: {path}") from exc
 
     dataframe = dataframe.copy()
+    # Compatibility shim for notebook-exported sentence data with a typoed column name.
+    if "cssource" in dataframe.columns and "source" not in dataframe.columns:
+        dataframe = dataframe.rename(columns={"cssource": "source"})
+
     required_columns = {"source", "target"}
     missing_columns = required_columns - set(dataframe.columns)
     if missing_columns:
@@ -41,6 +46,21 @@ def load_parallel_data(path: str) -> pd.DataFrame:
     return dataframe
 
 
+def create_bidirectional_train_data(train_df: pd.DataFrame, seed: int) -> pd.DataFrame:
+    """Duplicate the training data with an English-to-Akkadian reverse task."""
+    forward_df = train_df.copy()
+    forward_df["input_text"] = forward_df["source"].map(lambda text: TASK_PREFIX + text)
+    forward_df["target_text"] = forward_df["target"]
+
+    backward_df = train_df.copy()
+    backward_df["input_text"] = backward_df["target"].map(lambda text: REVERSE_TASK_PREFIX + text)
+    backward_df["target_text"] = backward_df["source"]
+
+    combined_df = pd.concat([forward_df, backward_df], ignore_index=True)
+    combined_df = combined_df.sample(frac=1.0, random_state=seed).reset_index(drop=True)
+    return combined_df
+
+
 def tokenize_function(
     examples: Dict[str, list[str]],
     tokenizer: PreTrainedTokenizerBase,
@@ -48,14 +68,20 @@ def tokenize_function(
     max_target_length: int,
 ) -> Dict[str, Any]:
     """Tokenize a batch of translation examples for ByT5."""
-    prefixed_sources = [TASK_PREFIX + text for text in examples["source"]]
+    if "input_text" in examples and "target_text" in examples:
+        inputs = [str(text) for text in examples["input_text"]]
+        targets = [str(text) for text in examples["target_text"]]
+    else:
+        inputs = [TASK_PREFIX + text for text in examples["source"]]
+        targets = [str(text) for text in examples["target"]]
+
     model_inputs = tokenizer(
-        prefixed_sources,
+        inputs,
         max_length=max_source_length,
         truncation=True,
     )
     labels = tokenizer(
-        text_target=examples["target"],
+        text_target=targets,
         max_length=max_target_length,
         truncation=True,
     )
@@ -72,8 +98,12 @@ def build_hf_dataset(
     validation_split_ratio: float = 0.05,
     seed: int = 42,
     preprocessing_num_workers: Optional[int] = None,
+    bidirectional_augmentation: bool = False,
 ) -> DatasetDict:
     """Build tokenized Hugging Face datasets for train/validation."""
+    if bidirectional_augmentation:
+        train_df = create_bidirectional_train_data(train_df, seed=seed)
+
     train_dataset = Dataset.from_pandas(train_df, preserve_index=False)
 
     if valid_df is None:

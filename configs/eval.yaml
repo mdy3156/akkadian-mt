@@ -1,9 +1,9 @@
-model_path: models/akkadian-tuyoi
-input_path: data/eval.csv
-output_dir: outputs/eval-public-tuyoi
+model_path: models/
+input_path: data/train_sentence.csv
+output_dir: outputs/eval12
 sample_ratio: 1.0
 seed: 42
 batch_size: 16
 max_source_length: 512
-max_new_tokens: 512
+max_new_tokens: 384
 num_beams: 4
