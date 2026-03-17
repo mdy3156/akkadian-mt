@@ -67,6 +67,9 @@ def build_training_arguments(config: Dict[str, Any], output_dir: str) -> Seq2Seq
         "dataloader_pin_memory": True,
     }
 
+    if "label_smoothing_factor" in config:
+        kwargs["label_smoothing_factor"] = float(config["label_smoothing_factor"])
+
     if "eval_strategy" in signature.parameters:
         kwargs["eval_strategy"] = config.get("eval_strategy", "steps")
     elif "evaluation_strategy" in signature.parameters:

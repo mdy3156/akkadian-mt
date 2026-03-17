@@ -1,6 +1,6 @@
-model_path: models/
-input_path: data/train_sentence.csv
-output_dir: outputs/eval12
+model_path: models/final-v2
+input_path: data/deep_past_sentencealign_baseline_source_target.csv
+output_dir: outputs/final-v2
 sample_ratio: 1.0
 seed: 42
 batch_size: 16
