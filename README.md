@@ -1,14 +1,6 @@
 # akkadian-mt
 
-公開済み Akkadian MT checkpoint または Hugging Face model ID を評価し、`data/train.csv` で fine-tune するための最小構成です。実行設定はすべて `configs/` の YAML で管理します。
-
-## Scope
-
-残している機能は 2 つだけです。
-- 公開モデルの評価
-- 公開モデルの fine-tune
-
-学習データ変換や追加コーパス結合はこのリポジトリでは扱いません。
+公開済み Akkadian MT checkpointをfine-tune するための最小構成です。実行設定はすべて `configs/` の YAML で管理します。
 
 ## Setup
 
@@ -85,23 +77,3 @@ python -m src.evaluate_checkpoint --config configs/eval_byt5_large.yaml
 - `eval_predictions.csv`
 
 `eval_predictions.csv` には `source_raw`, `source_preprocessed`, `prediction`, `target` を保存します。識別用の `id` は内部で連番を振ります。
-
-## Fine-tune
-
-```bash
-python -m src.train --config configs/train.yaml
-```
-
-別の公開モデルや出力先を使う場合も、CLI 引数ではなく config を編集します。
-学習時は `eval_path` があればそれを評価に使い、無ければ `train_path` を seed 固定で train/validation に分割します。
-
-`google/byt5-large` を直接 fine-tune する場合:
-
-```bash
-python -m src.train --config configs/train_byt5_large.yaml
-```
-
-`byt5-large` は重いので、まずは次を前提にしてください。
-- A100 以上
-- `bf16: true`
-- `per_device_train_batch_size: 1`
